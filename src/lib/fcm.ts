@@ -30,35 +30,32 @@ export async function requestFCMToken(userId: string): Promise<FCMResult> {
       return { success: false, error: "VAPID_KEY missing. Add NEXT_PUBLIC_FIREBASE_VAPID_KEY to env." };
     }
 
-    // Register service worker
+    // Register service worker (reuse existing if available)
     let registration;
     try {
-      registration = await navigator.serviceWorker.register(
-        "/firebase-messaging-sw.js"
-      );
-
-      // Wait for the service worker to become active
-      if (registration.installing) {
-        await new Promise<void>((resolve) => {
-          const sw = registration!.installing!;
-          sw.addEventListener("statechange", () => {
-            if (sw.state === "activated") resolve();
-          });
-        });
-      } else if (registration.waiting) {
-        await new Promise<void>((resolve) => {
-          const sw = registration!.waiting!;
-          sw.addEventListener("statechange", () => {
-            if (sw.state === "activated") resolve();
-          });
-        });
+      const existingReg = await navigator.serviceWorker.getRegistration("/firebase-messaging-sw.js");
+      if (existingReg?.active) {
+        registration = existingReg;
+      } else {
+        registration = await navigator.serviceWorker.register("/firebase-messaging-sw.js");
+        // Quick wait: 5s max for activation on Android
+        if (!registration.active) {
+          await Promise.race([
+            navigator.serviceWorker.ready,
+            new Promise((_, reject) => setTimeout(() => reject(new Error("SW timeout")), 5000)),
+          ]);
+        }
       }
     } catch (swError: any) {
-      return { success: false, error: `Service worker failed: ${swError.message}` };
+      // If timeout, still try — SW might be ready enough
+      if (swError.message !== "SW timeout") {
+        return { success: false, error: `Service worker failed: ${swError.message}` };
+      }
+      registration = await navigator.serviceWorker.getRegistration("/firebase-messaging-sw.js");
+      if (!registration) {
+        return { success: false, error: "Service worker not available" };
+      }
     }
-
-    // Wait for the service worker to be ready
-    await navigator.serviceWorker.ready;
 
     const messaging = getMessaging();
     const token = await getToken(messaging, {
