@@ -68,7 +68,14 @@ export function useFCM() {
           setEnabled(true);
           toast.success("Push notifications enabled!");
         } else {
-          toast.error("Could not enable notifications. Check browser permissions.");
+          // Check what went wrong
+          if (!("Notification" in window)) {
+            toast.error("This browser does not support notifications.");
+          } else if (Notification.permission === "denied") {
+            toast.error("Notifications blocked. Enable them in browser settings.");
+          } else {
+            toast.error("Could not enable notifications. Check console for details.");
+          }
         }
       }
     } catch {

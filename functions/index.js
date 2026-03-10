@@ -3,7 +3,7 @@
  *
  * checkReminders — runs every minute via Cloud Scheduler.
  * Checks all tasks with upcoming reminders and sends push notifications
- * to the user's device via FCM.
+ * to the user's device via FCM (works on Android Chrome, Desktop, etc.).
  *
  * Deploy: firebase deploy --only functions
  */
@@ -72,39 +72,40 @@ exports.checkReminders = onSchedule("every 1 minutes", async () => {
           ? "is due now!"
           : `is due in ${formatOffset(task.reminder)}`;
 
+      const priorityEmoji =
+        task.priority === "high" ? "🔴"
+        : task.priority === "medium" ? "🟡"
+        : "🟢";
+
+      const title = `${priorityEmoji} ⏰ ${task.title}`;
+      const body = `This task ${reminderText} (${task.dueTime})${task.description ? "\n" + task.description : ""}`;
+
+      // Use DATA-ONLY message so service worker handles display
+      // This works on Android Chrome, Desktop Chrome, Edge, Firefox
       const message = {
         token,
-        notification: {
-          title: `⏰ ${task.title}`,
-          body: `This task ${reminderText} (${task.dueTime})`,
-        },
         data: {
+          title,
+          body,
           taskId: taskDoc.id,
+          priority: task.priority || "medium",
           url: "/dashboard",
+          type: "task-reminder",
         },
-        // Android-specific: high priority + notification channel
+        // Web push config for Android Chrome + Desktop browsers
+        webpush: {
+          headers: {
+            Urgency: "high",
+            TTL: "86400",
+          },
+          fcmOptions: {
+            link: "/dashboard",
+          },
+        },
+        // Android config for high priority delivery
         android: {
           priority: "high",
-          notification: {
-            channelId: "task-reminders",
-            icon: "ic_notification",
-            color: "#4c6ef5",
-            sound: "default",
-            clickAction: "OPEN_DASHBOARD",
-          },
-        },
-        // Windows/Web: needs no extra config, uses service worker
-        webpush: {
-          headers: { Urgency: "high" },
-          notification: {
-            icon: "/icon-192.png",
-            badge: "/icon-192.png",
-            requireInteraction: true,
-            actions: [
-              { action: "open", title: "Open" },
-              { action: "done", title: "Mark Done" },
-            ],
-          },
+          ttl: 86400000,
         },
       };
 

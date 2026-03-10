@@ -23,14 +23,49 @@ export async function requestFCMToken(userId: string): Promise<string | null> {
     // Request notification permission
     const permission = await Notification.requestPermission();
     if (permission !== "granted") {
-      console.warn("Notification permission denied");
+      console.warn("Notification permission denied, status:", permission);
       return null;
     }
 
+    // Check VAPID key
+    if (!VAPID_KEY) {
+      console.error("VAPID_KEY is missing! Check NEXT_PUBLIC_FIREBASE_VAPID_KEY env variable.");
+      return null;
+    }
+    console.log("VAPID key present, length:", VAPID_KEY.length);
+
     // Register service worker
-    const registration = await navigator.serviceWorker.register(
-      "/firebase-messaging-sw.js"
-    );
+    let registration;
+    try {
+      registration = await navigator.serviceWorker.register(
+        "/firebase-messaging-sw.js"
+      );
+      console.log("Service worker registered:", registration.scope);
+
+      // Wait for the service worker to become active
+      if (registration.installing) {
+        await new Promise<void>((resolve) => {
+          const sw = registration!.installing!;
+          sw.addEventListener("statechange", () => {
+            if (sw.state === "activated") resolve();
+          });
+        });
+      } else if (registration.waiting) {
+        await new Promise<void>((resolve) => {
+          const sw = registration!.waiting!;
+          sw.addEventListener("statechange", () => {
+            if (sw.state === "activated") resolve();
+          });
+        });
+      }
+    } catch (swError) {
+      console.error("Service worker registration failed:", swError);
+      return null;
+    }
+
+    // Wait for the service worker to be ready
+    await navigator.serviceWorker.ready;
+    console.log("Service worker is ready");
 
     const messaging = getMessaging();
     const token = await getToken(messaging, {
@@ -47,6 +82,8 @@ export async function requestFCMToken(userId: string): Promise<string | null> {
         platform: detectPlatform(),
       });
       console.log("FCM token saved:", token.slice(0, 20) + "...");
+    } else {
+      console.warn("getToken returned empty");
     }
 
     return token;
@@ -75,7 +112,15 @@ export function onForegroundMessage(callback: (payload: any) => void): () => voi
     const messaging = getMessaging();
     const unsubscribe = onMessage(messaging, (payload) => {
       console.log("Foreground message:", payload);
-      callback(payload);
+      // Normalize data-only messages to look like display messages
+      const normalized = {
+        ...payload,
+        notification: payload.notification || {
+          title: payload.data?.title || "BibonTask",
+          body: payload.data?.body || "",
+        },
+      };
+      callback(normalized);
     });
     return unsubscribe;
   } catch {
