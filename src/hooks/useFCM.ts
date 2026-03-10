@@ -23,8 +23,8 @@ export function useFCM() {
     if (!user || !enabled || initialized.current) return;
     initialized.current = true;
 
-    requestFCMToken(user.uid).then((token) => {
-      if (token) {
+    requestFCMToken(user.uid).then((result) => {
+      if (result.success) {
         console.log("FCM registered");
       }
     });
@@ -62,24 +62,18 @@ export function useFCM() {
         toast.success("Push notifications disabled");
       } else {
         // Enable
-        const token = await requestFCMToken(user.uid);
-        if (token) {
+        const result = await requestFCMToken(user.uid);
+        if (result.success) {
           localStorage.setItem("bibontask-push-enabled", "true");
           setEnabled(true);
           toast.success("Push notifications enabled!");
         } else {
-          // Check what went wrong
-          if (!("Notification" in window)) {
-            toast.error("This browser does not support notifications.");
-          } else if (Notification.permission === "denied") {
-            toast.error("Notifications blocked. Enable them in browser settings.");
-          } else {
-            toast.error("Could not enable notifications. Check console for details.");
-          }
+          // Show exact error so user can report it
+          toast.error(result.error, { duration: 8000 });
         }
       }
-    } catch {
-      toast.error("Failed to update notification settings");
+    } catch (err: any) {
+      toast.error(`Failed: ${err.message || err}`);
     } finally {
       setLoading(false);
     }

@@ -92,31 +92,52 @@ export default function ProfilePage() {
             <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 mb-4">
               Notifications
             </h2>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-zinc-700 dark:text-zinc-300">
-                  Push Notifications
-                </p>
-                <p className="text-xs text-zinc-400 mt-0.5">
-                  {pushEnabled
-                    ? "Reminders will be sent even when browser is closed"
-                    : "Enable to get task reminders on your device"}
-                </p>
-              </div>
-              <button
-                onClick={togglePush}
-                disabled={pushLoading}
-                className={`
-                  p-3 rounded-xl transition-colors
+            <button
+              onClick={() => {
+                console.log("Push button clicked");
+                togglePush();
+              }}
+              disabled={pushLoading}
+              className={`
+                w-full flex items-center justify-between p-4 rounded-xl transition-all active:scale-[0.98]
+                ${pushEnabled
+                  ? "bg-brand-50 dark:bg-brand-900/20 border-2 border-brand-200 dark:border-brand-800"
+                  : "bg-zinc-50 dark:bg-zinc-800/50 border-2 border-zinc-200 dark:border-zinc-700"}
+                ${pushLoading ? "opacity-50 cursor-wait" : "cursor-pointer hover:shadow-md"}
+              `}
+            >
+              <div className="flex items-center gap-3">
+                <div className={`
+                  w-10 h-10 rounded-full flex items-center justify-center
                   ${pushEnabled
-                    ? "bg-brand-50 text-brand-600 dark:bg-brand-900/20 dark:text-brand-400 hover:bg-brand-100 dark:hover:bg-brand-900/30"
-                    : "bg-zinc-100 text-zinc-400 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700"}
-                  ${pushLoading ? "opacity-50" : ""}
-                `}
-              >
-                {pushEnabled ? <Bell size={20} /> : <BellOff size={20} />}
-              </button>
-            </div>
+                    ? "bg-brand-100 text-brand-600 dark:bg-brand-900/40 dark:text-brand-400"
+                    : "bg-zinc-200 text-zinc-500 dark:bg-zinc-700 dark:text-zinc-400"}
+                `}>
+                  {pushEnabled ? <Bell size={20} /> : <BellOff size={20} />}
+                </div>
+                <div className="text-left">
+                  <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                    Push Notifications
+                  </p>
+                  <p className="text-xs text-zinc-400 mt-0.5">
+                    {pushLoading
+                      ? "Connecting..."
+                      : pushEnabled
+                        ? "Enabled — reminders will arrive on this device"
+                        : "Tap to enable task reminders"}
+                  </p>
+                </div>
+              </div>
+              <div className={`
+                w-12 h-7 rounded-full relative transition-colors
+                ${pushEnabled ? "bg-brand-500" : "bg-zinc-300 dark:bg-zinc-600"}
+              `}>
+                <div className={`
+                  absolute top-0.5 w-6 h-6 bg-white rounded-full shadow transition-transform
+                  ${pushEnabled ? "translate-x-5" : "translate-x-0.5"}
+                `} />
+              </div>
+            </button>
           </div>
 
           {/* Theme */}

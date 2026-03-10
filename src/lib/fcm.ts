@@ -3,36 +3,32 @@ import { doc, setDoc, deleteDoc } from "firebase/firestore";
 import { db } from "./firebase";
 
 // ── VAPID key ───────────────────────────────────────────
-// You need to generate this in Firebase Console:
-// Project Settings → Cloud Messaging → Web Push certificates → Generate key pair
-// Then paste it here or use an env variable.
 const VAPID_KEY = process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY || "";
 
-// ── Get FCM token ───────────────────────────────────────
-// Registers the service worker, requests permission, and returns the FCM token.
-// Stores the token in Firestore so your backend (Cloud Functions) can send push.
+// ── Result type ─────────────────────────────────────────
+export type FCMResult =
+  | { success: true; token: string }
+  | { success: false; error: string };
 
-export async function requestFCMToken(userId: string): Promise<string | null> {
+// ── Get FCM token ───────────────────────────────────────
+
+export async function requestFCMToken(userId: string): Promise<FCMResult> {
   try {
     const supported = await isSupported();
     if (!supported) {
-      console.warn("FCM not supported in this browser");
-      return null;
+      return { success: false, error: "FCM not supported in this browser" };
     }
 
     // Request notification permission
     const permission = await Notification.requestPermission();
     if (permission !== "granted") {
-      console.warn("Notification permission denied, status:", permission);
-      return null;
+      return { success: false, error: `Notification permission: ${permission}` };
     }
 
     // Check VAPID key
     if (!VAPID_KEY) {
-      console.error("VAPID_KEY is missing! Check NEXT_PUBLIC_FIREBASE_VAPID_KEY env variable.");
-      return null;
+      return { success: false, error: "VAPID_KEY missing. Add NEXT_PUBLIC_FIREBASE_VAPID_KEY to env." };
     }
-    console.log("VAPID key present, length:", VAPID_KEY.length);
 
     // Register service worker
     let registration;
@@ -40,7 +36,6 @@ export async function requestFCMToken(userId: string): Promise<string | null> {
       registration = await navigator.serviceWorker.register(
         "/firebase-messaging-sw.js"
       );
-      console.log("Service worker registered:", registration.scope);
 
       // Wait for the service worker to become active
       if (registration.installing) {
@@ -58,14 +53,12 @@ export async function requestFCMToken(userId: string): Promise<string | null> {
           });
         });
       }
-    } catch (swError) {
-      console.error("Service worker registration failed:", swError);
-      return null;
+    } catch (swError: any) {
+      return { success: false, error: `Service worker failed: ${swError.message}` };
     }
 
     // Wait for the service worker to be ready
     await navigator.serviceWorker.ready;
-    console.log("Service worker is ready");
 
     const messaging = getMessaging();
     const token = await getToken(messaging, {
@@ -81,15 +74,12 @@ export async function requestFCMToken(userId: string): Promise<string | null> {
         updatedAt: new Date().toISOString(),
         platform: detectPlatform(),
       });
-      console.log("FCM token saved:", token.slice(0, 20) + "...");
+      return { success: true, token };
     } else {
-      console.warn("getToken returned empty");
+      return { success: false, error: "getToken returned empty. Check Firebase project config." };
     }
-
-    return token;
-  } catch (error) {
-    console.error("Failed to get FCM token:", error);
-    return null;
+  } catch (error: any) {
+    return { success: false, error: `FCM error: ${error.message || error}` };
   }
 }
 
@@ -104,15 +94,12 @@ export async function removeFCMToken(userId: string): Promise<void> {
 }
 
 // ── Listen for foreground messages ──────────────────────
-// When the app is open and focused, service worker doesn't show notifications.
-// We handle them here instead.
 
 export function onForegroundMessage(callback: (payload: any) => void): () => void {
   try {
     const messaging = getMessaging();
     const unsubscribe = onMessage(messaging, (payload) => {
       console.log("Foreground message:", payload);
-      // Normalize data-only messages to look like display messages
       const normalized = {
         ...payload,
         notification: payload.notification || {
