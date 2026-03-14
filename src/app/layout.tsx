@@ -9,6 +9,7 @@ export const metadata: Metadata = {
   description:
     "A beautiful, minimal task planner built with Next.js, Firebase, and Tailwind CSS.",
   viewport: "width=device-width, initial-scale=1, maximum-scale=1",
+  manifest: "/manifest.json",
 };
 
 export default function RootLayout({
